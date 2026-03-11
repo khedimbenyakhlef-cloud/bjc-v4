@@ -27,3 +27,7 @@ async function listManagedContainers() {
 }
 
 module.exports = { startContainer, stopContainer, removeContainer, getContainerStats, listManagedContainers };
+
+async function ensureAppNetwork() {
+}
+module.exports = { startContainer, stopContainer, removeContainer, getContainerStats, listManagedContainers, ensureAppNetwork };
