@@ -1,7 +1,7 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 FROM node:18-alpine AS production
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
