@@ -1,0 +1,13 @@
+'use strict';
+const r = require('express').Router({ mergeParams: true });
+const c = require('../controllers/functionController');
+const auth = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
+r.use(auth);
+r.get('/', c.list);
+r.post('/', c.create);
+r.put('/:fnId', c.update);
+r.delete('/:fnId', c.delete);
+r.post('/:fnId/invoke', apiLimiter, c.invoke);
+r.get('/:fnId/logs', c.getLogs);
+module.exports = r;

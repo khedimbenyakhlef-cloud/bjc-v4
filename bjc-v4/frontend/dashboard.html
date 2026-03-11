@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Beny-Joe Cloud V4</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dashboard-page">
+  <nav class="navbar">
+    <a href="/dashboard.html" class="brand">☁️ BJC V4</a>
+    <div class="nav-links">
+      <a href="/dashboard.html" class="nav-link active">Applications</a>
+      <a href="/ai.html" class="nav-link">IA</a>
+    </div>
+    <div class="user-menu">
+      <div class="avatar" id="userAvatar">?</div>
+      <span id="userName"></span>
+      <button class="btn btn-secondary btn-sm" onclick="logout()">Déconnexion</button>
+    </div>
+  </nav>
+
+  <main class="page-content">
+    <div class="page-header">
+      <div>
+        <h1>Mes Applications</h1>
+        <p class="text-muted mt-1" id="appCount">Chargement...</p>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="showCreateModal()">+ Nouvelle app</button>
+    </div>
+
+    <div id="alert" class="alert hidden"></div>
+    <div id="appsGrid" class="sites-grid"></div>
+  </main>
+
+  <!-- Modal création -->
+  <div id="createModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Créer une application</h2>
+      <div class="form-group">
+        <label>Nom</label>
+        <input id="appName" type="text" placeholder="mon-app">
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="appType" style="width:100%;padding:.625rem;border:1.5px solid var(--border);border-radius:8px;font-size:.9375rem;">
+          <option value="static">Site statique (HTML/CSS/JS)</option>
+          <option value="fullstack">Application full-stack (Node.js, Python...)</option>
+        </select>
+      </div>
+      <div class="form-group" id="runtimeGroup" style="display:none">
+        <label>Runtime</label>
+        <select id="appRuntime" style="width:100%;padding:.625rem;border:1.5px solid var(--border);border-radius:8px;font-size:.9375rem;">
+          <option value="nodejs18">Node.js 18</option>
+          <option value="nodejs20">Node.js 20</option>
+          <option value="python311">Python 3.11</option>
+          <option value="python312">Python 3.12</option>
+          <option value="php82">PHP 8.2</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="createApp()">Créer</button>
+        <button class="btn btn-secondary" onclick="hideModal('createModal')">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal déploiement -->
+  <div id="deployModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Déployer <span id="deployAppName"></span></h2>
+      <input type="hidden" id="deployAppId">
+      <div class="form-group">
+        <label>Fichier ZIP</label>
+        <input id="zipFile" type="file" accept=".zip">
+        <p class="text-muted mt-1">
+          Pour les apps full-stack, le ZIP doit contenir votre code source.<br>
+          Le runtime est auto-détecté (package.json = Node.js, requirements.txt = Python).
+        </p>
+      </div>
+      <div id="deployProgress" class="hidden">
+        <p class="text-muted">Envoi en cours...</p>
+        <div class="progress-bar mt-2"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="deployBtn" onclick="deployApp()">Déployer</button>
+        <button class="btn btn-secondary" onclick="hideModal('deployModal')">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal env vars -->
+  <div id="envModal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:600px">
+      <h2>Variables d'environnement — <span id="envAppName"></span></h2>
+      <input type="hidden" id="envAppId">
+      <div id="envList" style="margin-bottom:1rem;max-height:250px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <input id="envKey" type="text" placeholder="CLE" style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:6px;font-family:monospace">
+        <input id="envVal" type="text" placeholder="valeur" style="flex:2;padding:.5rem;border:1px solid var(--border);border-radius:6px">
+        <label style="display:flex;align-items:center;gap:.25rem;font-size:.875rem"><input type="checkbox" id="envSecret"> Secret</label>
+        <button class="btn btn-primary btn-sm" onclick="addEnvVar()">Ajouter</button>
+      </div>
+      <div class="modal-actions" style="margin-top:1rem">
+        <button class="btn btn-secondary" onclick="hideModal('envModal')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal fonctions serverless -->
+  <div id="fnModal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:700px">
+      <h2>Fonctions serverless — <span id="fnAppName"></span></h2>
+      <input type="hidden" id="fnAppId">
+      <div id="fnList" style="margin-bottom:1rem;"></div>
+      <details style="margin-bottom:1rem">
+        <summary style="cursor:pointer;font-weight:600">+ Nouvelle fonction</summary>
+        <div style="margin-top:1rem">
+          <div class="form-group">
+            <label>Nom</label><input id="fnName" type="text" placeholder="ma-fonction">
+          </div>
+          <div class="form-group">
+            <label>Runtime</label>
+            <select id="fnRuntime" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px">
+              <option value="nodejs18">Node.js 18</option>
+              <option value="python311">Python 3.11</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Code (doit exporter un handler(event, context))</label>
+            <textarea id="fnCode" rows="8" style="width:100%;font-family:monospace;font-size:.8125rem;padding:.5rem;border:1px solid var(--border);border-radius:6px;resize:vertical">// Node.js example
+exports.handler = async (event, context) => {
+  return { message: 'Hello from serverless!', event };
+};</textarea>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="createFunction()">Créer la fonction</button>
+        </div>
+      </details>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="hideModal('fnModal')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+version: '3.9'
+
+# ── Développement ────────────────────────────────────────────
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: beny
+      POSTGRES_PASSWORD: devpassword123
+      POSTGRES_DB: benycloud
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beny -d benycloud"]
+      interval: 10s; timeout: 5s; retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --loglevel warning
+    volumes: [redisdata:/data]
+    ports: ["6379:6379"]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s; timeout: 5s; retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes: [miniodata:/data]
+    ports: ["9000:9000", "9001:9001"]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s; timeout: 10s; retries: 3
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=bjc_apps"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"   # Dashboard Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefikdata:/letsencrypt
+    networks: [web, internal]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://beny:devpassword123@postgres:5432/benycloud
+      DB_HOST_FOR_APPS: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET: sites
+      JWT_SECRET: dev_jwt_secret_change_in_production_very_long_string_64chars_min
+      SESSION_SECRET: dev_session_secret_change_me
+      ENCRYPTION_KEY: "dev_encryption_key_32chars_here!"
+      FRONTEND_URL: http://localhost
+      BASE_DOMAIN: localhost
+      DOCKER_SOCKET: /var/run/docker.sock
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: http://localhost/api/auth/google/callback
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Pour la gestion des conteneurs
+      - ./backend:/app
+      - /app/node_modules
+    networks: [internal, web, bjc_apps]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/site`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3000"
+
+networks:
+  internal: { driver: bridge }
+  web: { driver: bridge }
+  bjc_apps:
+    name: bjc_apps
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  traefikdata:

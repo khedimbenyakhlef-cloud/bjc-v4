@@ -1,0 +1,10 @@
+'use strict';
+const r = require('express').Router({ mergeParams: true });
+const c = require('../controllers/cronController');
+const auth = require('../middleware/auth');
+r.use(auth);
+r.get('/', c.list);
+r.post('/', c.create);
+r.patch('/:jobId/toggle', c.toggle);
+r.delete('/:jobId', c.delete);
+module.exports = r;

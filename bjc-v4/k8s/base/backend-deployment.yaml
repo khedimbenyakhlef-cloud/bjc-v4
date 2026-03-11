@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bjc-backend
+  namespace: bjc-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bjc-backend
+  template:
+    metadata:
+      labels:
+        app: bjc-backend
+    spec:
+      serviceAccountName: bjc-backend-sa
+      containers:
+        - name: backend
+          image: bjc-backend:4.0.0
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: bjc-secrets
+            - configMapRef:
+                name: bjc-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bjc-backend-svc
+  namespace: bjc-platform
+spec:
+  selector:
+    app: bjc-backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bjc-backend-sa
+  namespace: bjc-platform

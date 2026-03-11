@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.prod
+*.log
+ssl/
+dist/
+.DS_Store
+letsencrypt/

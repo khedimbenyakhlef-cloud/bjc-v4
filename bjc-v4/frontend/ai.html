@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IA — Beny-Joe Cloud</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dashboard-page">
+  <nav class="navbar">
+    <a href="/dashboard.html" class="brand">☁️ Beny-Joe Cloud</a>
+    <div class="nav-links">
+      <a href="/dashboard.html" class="nav-link">Mes sites</a>
+      <a href="/ai.html" class="nav-link active">IA</a>
+    </div>
+    <div class="user-menu">
+      <button class="btn btn-secondary btn-sm" onclick="logout()">Déconnexion</button>
+    </div>
+  </nav>
+
+  <main class="page-content" style="max-width:800px">
+    <div class="page-header">
+      <h1>🤖 Générateur IA</h1>
+    </div>
+    <div id="alert" class="alert hidden"></div>
+
+    <div class="card">
+      <div class="form-group">
+        <label for="prompt">Décrivez le site que vous voulez générer</label>
+        <textarea id="prompt" rows="5" style="width:100%;padding:.625rem .875rem;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9375rem;resize:vertical;"
+          placeholder="Ex: Une page portfolio minimaliste pour un photographe, avec une section hero, une galerie de 6 photos et un formulaire de contact..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:auto" id="generateBtn" onclick="generate()">
+        ✨ Générer
+      </button>
+    </div>
+
+    <div id="result" class="card hidden" style="margin-top:1.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 style="margin:0">Résultat</h2>
+        <button class="btn btn-secondary btn-sm" onclick="copyResult()">📋 Copier</button>
+      </div>
+      <pre id="resultContent" style="white-space:pre-wrap;word-break:break-word;font-family:'Courier New',monospace;font-size:.8125rem;background:var(--bg);padding:1rem;border-radius:8px;overflow:auto;max-height:500px;"></pre>
+    </div>
+  </main>
+
+  <script>
+    const token = localStorage.getItem('bjc_token');
+    if (!token) window.location.href = '/';
+    function logout() { localStorage.clear(); window.location.href = '/'; }
+    function showAlert(msg, type='error') {
+      const el = document.getElementById('alert');
+      el.textContent = msg; el.className = `alert alert-${type}`; el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 5000);
+    }
+    async function generate() {
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) return showAlert('Veuillez saisir un prompt.');
+      const btn = document.getElementById('generateBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Génération en cours...';
+      btn.style.opacity = '.7';
+      try {
+        const res = await fetch('/api/ai/generate', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await res.json();
+        if (!res.ok) return showAlert(data.error || 'Erreur IA.');
+        document.getElementById('resultContent').textContent = data.result;
+        document.getElementById('result').classList.remove('hidden');
+      } catch { showAlert('Erreur réseau.'); }
+      finally { btn.disabled = false; btn.innerHTML = '✨ Générer'; btn.style.opacity = '1'; }
+    }
+    function copyResult() {
+      const text = document.getElementById('resultContent').textContent;
+      navigator.clipboard.writeText(text).then(() => showAlert('Copié !', 'success'));
+    }
+  </script>
+</body>
+</html>

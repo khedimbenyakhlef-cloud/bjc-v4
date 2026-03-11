@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beny-Joe Cloud V3 — Connexion</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body class="auth-page">
+
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <span class="logo">☁️</span>
+        <h1>Beny-Joe Cloud</h1>
+        <p class="subtitle">Déployez vos sites statiques en quelques secondes</p>
+      </div>
+
+      <!-- Alertes -->
+      <div id="alert" class="alert hidden"></div>
+
+      <!-- Formulaire Connexion -->
+      <div id="loginForm">
+        <h2>Connexion</h2>
+
+        <!-- Bouton Google -->
+        <a href="/api/auth/google" class="btn btn-google">
+          <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.962L3.964 6.294C4.672 4.169 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          Continuer avec Google
+        </a>
+
+        <div class="divider"><span>ou</span></div>
+
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" placeholder="vous@exemple.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Mot de passe</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" onclick="login()">Se connecter</button>
+
+        <p class="form-switch">Pas encore de compte ? <a href="#" onclick="showRegister()">S'inscrire</a></p>
+      </div>
+
+      <!-- Formulaire Inscription -->
+      <div id="registerForm" class="hidden">
+        <h2>Créer un compte</h2>
+
+        <a href="/api/auth/google" class="btn btn-google">
+          <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.962L3.964 6.294C4.672 4.169 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          Continuer avec Google
+        </a>
+
+        <div class="divider"><span>ou</span></div>
+
+        <div class="form-group">
+          <label for="regName">Nom (optionnel)</label>
+          <input id="regName" type="text" placeholder="Jean Dupont" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="regEmail">Email</label>
+          <input id="regEmail" type="email" placeholder="vous@exemple.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Mot de passe</label>
+          <input id="regPassword" type="password" placeholder="Min. 8 caractères, 1 maj, 1 chiffre" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary" onclick="register()">Créer mon compte</button>
+
+        <p class="form-switch">Déjà un compte ? <a href="#" onclick="showLogin()">Se connecter</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
