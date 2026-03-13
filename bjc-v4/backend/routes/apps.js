@@ -12,7 +12,7 @@ const Deployment = require('../models/Deployment');
 const logger = require('../utils/logger');
 
 // ── Stockage local (sans MinIO) ───────────────────────────────
-const STORAGE_DIR = process.env.STORAGE_DIR || path.join(__dirname, '../storage');
+const STORAGE_DIR = process.env.STORAGE_DIR || '/tmp/storage';
 if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
 const upload = multer({
