@@ -14,7 +14,7 @@ const apiLimiter = rateLimit({
 /** Limiteur strict pour les routes d'authentification */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -23,7 +23,7 @@ const authLimiter = rateLimit({
 /** Limiteur pour les uploads / déploiements */
 const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
-  max: 20,
+  max: 200,
   message: { error: 'Quota de déploiements atteint. Réessayez dans une heure.' },
   standardHeaders: true,
   legacyHeaders: false,
