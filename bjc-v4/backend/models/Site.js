@@ -26,7 +26,7 @@ class Site {
 
   static async findByUser(userId) {
     const { rows } = await db.query(
-      `SELECT s.*, 
+      `SELECT s.*,
               (SELECT COUNT(*) FROM deployments d WHERE d.site_id = s.id)::int AS deployment_count
        FROM sites s
        WHERE s.user_id = $1
@@ -37,13 +37,13 @@ class Site {
   }
 
   static async findById(id) {
-    const { rows } = await db.query('SELECT * FROM sites WHERE id = $1', [id]);
+    const { rows } = await db.query('SELECT * FROM sites WHERE id = $1::integer', [id]);
     return rows[0] || null;
   }
 
   static async findByIdAndUser(id, userId) {
     const { rows } = await db.query(
-      'SELECT * FROM sites WHERE id = $1 AND user_id = $2',
+      'SELECT * FROM sites WHERE id = $1::integer AND user_id = $2::integer',
       [id, userId]
     );
     return rows[0] || null;
@@ -64,14 +64,14 @@ class Site {
    */
   static async setActiveVersion(id, versionId) {
     await db.query(
-      `UPDATE sites SET active_version = $1, status = 'active' WHERE id = $2`,
+      `UPDATE sites SET active_version = $1, status = 'active' WHERE id = $2::integer`,
       [versionId, id]
     );
   }
 
   static async delete(id, userId) {
     const { rowCount } = await db.query(
-      'DELETE FROM sites WHERE id = $1 AND user_id = $2',
+      'DELETE FROM sites WHERE id = $1::integer AND user_id = $2::integer',
       [id, userId]
     );
     return rowCount > 0;
