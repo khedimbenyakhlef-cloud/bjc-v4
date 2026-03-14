@@ -5,17 +5,22 @@ const path = require('path');
 const fs = require('fs');
 const App = require('../models/App');
 const Deployment = require('../models/Deployment');
-const { minioClient, BUCKET } = require('../config/minio');
 const { proxyMiddleware } = require('../services/proxyRouter');
 const logger = require('../utils/logger');
 
 router.use('/:slug', async (req, res, next) => {
+  console.log('siteServe: route atteinte pour slug =', req.params.slug);
   const { slug } = req.params;
   try {
+    console.log('siteServe: recherche de l\'app avec slug', slug);
     const app = await App.findBySlug(slug);
-    if (!app) return res.status(404).send('Application introuvable');
+    if (!app) {
+      console.log('siteServe: app non trouvée');
+      return res.status(404).send('Application introuvable');
+    }
+    console.log('siteServe: app trouvée, id =', app.id, 'active_version =', app.active_version);
 
-    // Fonctions serverless (inchangé)
+    // Fonctions serverless
     if (req.path.startsWith('/api/')) {
       const fnSlug = req.path.replace('/api/', '').split('/')[0];
       const ServerlessFunction = require('../models/Function');
@@ -32,16 +37,19 @@ router.use('/:slug', async (req, res, next) => {
       }
     }
 
-    // App full-stack → proxy (inchangé)
+    // App full-stack
     if (app.app_type !== 'static' && app.container_id) {
       req.params.slug = slug;
       return proxyMiddleware(req, res, next);
     }
 
-    // Site statique → servir depuis le stockage local
-    if (!app.active_version) return res.status(503).send('Application pas encore déployée');
+    // Site statique
+    if (!app.active_version) {
+      console.log('siteServe: pas de version active');
+      return res.status(503).send('Application pas encore déployée');
+    }
 
-    // Récupérer le déploiement correspondant à la version active
+    console.log('siteServe: recherche du déploiement pour version', app.active_version);
     const deployments = await Deployment.findByApp(app.id, 100);
     const deployment = deployments.find(d => d.version_id === app.active_version);
     if (!deployment) {
@@ -49,7 +57,8 @@ router.use('/:slug', async (req, res, next) => {
       return res.status(404).send('Déploiement introuvable');
     }
 
-    const basePath = deployment.storage_path; // chemin du dossier extrait
+    const basePath = deployment.storage_path;
+    console.log('siteServe: basePath =', basePath);
     if (!basePath) return res.status(404).send('Chemin de stockage introuvable');
 
     const filePath = req.params[0] || 'index.html';
@@ -59,12 +68,13 @@ router.use('/:slug', async (req, res, next) => {
     }
 
     const fullPath = path.join(basePath, requestedPath);
+    console.log('siteServe: fullPath =', fullPath);
     if (!fullPath.startsWith(basePath)) {
       return res.status(400).send('Chemin invalide');
     }
 
     if (!fs.existsSync(fullPath)) {
-      // Fallback vers index.html pour les SPA
+      console.log('siteServe: fichier non trouvé, fallback index.html');
       if (filePath !== 'index.html') {
         const fallbackPath = path.join(basePath, 'index.html');
         if (fs.existsSync(fallbackPath)) {
