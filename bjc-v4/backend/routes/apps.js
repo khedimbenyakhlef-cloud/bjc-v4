@@ -12,7 +12,7 @@ const App = require('../models/App');
 const Deployment = require('../models/Deployment');
 const logger = require('../utils/logger');
 
-// ── Stockage local (sans MinIO) ───────────────────────────────
+// ── Stockage local ───────────────────────────────
 const STORAGE_DIR = '/tmp/storage';
 if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
@@ -43,11 +43,7 @@ r.post('/:id/deploy', uploadLimiter, upload.single('zipFile'), async (req, res) 
     if (!app) return res.status(404).json({ error: 'App introuvable' });
     if (!req.file) return res.status(400).json({ error: 'Fichier ZIP requis' });
 
-    // Conversion explicite en nombre
     const appId = Number(app.id);
-    console.log('app.id type:', typeof app.id, 'valeur:', app.id);
-    console.log('appId après Number:', typeof appId, 'valeur:', appId);
-
     const versionId = uuidv4();
     const appStorageDir = path.join(STORAGE_DIR, String(req.user.id), String(app.id), versionId);
     const extractedDir = path.join(appStorageDir, 'extracted');
@@ -58,10 +54,33 @@ r.post('/:id/deploy', uploadLimiter, upload.single('zipFile'), async (req, res) 
     // Sauvegarde du ZIP
     fs.writeFileSync(zipPath, req.file.buffer);
 
-    // Extraction du ZIP
+    // Extraction
     const zip = new AdmZip(zipPath);
     zip.extractAllTo(extractedDir, true);
-    console.log('Extraction terminée, fichiers dans', extractedDir);
+    console.log('Extraction terminée dans', extractedDir);
+
+    // Vérifier si le dossier extrait contient un unique dossier racine
+    const items = fs.readdirSync(extractedDir);
+    if (items.length === 1 && fs.statSync(path.join(extractedDir, items[0])).isDirectory()) {
+      // Cas où le ZIP a été fait avec un dossier parent : on utilise ce dossier comme racine
+      const realRoot = path.join(extractedDir, items[0]);
+      // On déplace tout le contenu du dossier racine vers extractedDir
+      const subItems = fs.readdirSync(realRoot);
+      subItems.forEach(item => {
+        const src = path.join(realRoot, item);
+        const dest = path.join(extractedDir, item);
+        fs.renameSync(src, dest);
+      });
+      fs.rmdirSync(realRoot);
+      console.log('Ajustement : le dossier racine unique a été aplati');
+    }
+
+    // Vérifier qu'un index.html existe
+    const indexPath = path.join(extractedDir, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      logger.warn('Aucun index.html trouvé dans le ZIP', { appId: app.id });
+      // On peut renvoyer une erreur ou continuer (le site sera vide)
+    }
 
     // Enregistrement en base
     const deployment = await Deployment.create({ appId, versionId, storagePath: extractedDir });
