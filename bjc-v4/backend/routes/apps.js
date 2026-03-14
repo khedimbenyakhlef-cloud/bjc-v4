@@ -7,12 +7,13 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const AdmZip = require('adm-zip');
 const App = require('../models/App');
 const Deployment = require('../models/Deployment');
 const logger = require('../utils/logger');
 
 // ── Stockage local (sans MinIO) ───────────────────────────────
-const STORAGE_DIR = process.env.STORAGE_DIR || '/tmp/storage';
+const STORAGE_DIR = '/tmp/storage';
 if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
 const upload = multer({
@@ -37,25 +38,33 @@ r.get('/:id/stats', c.getStats);
 // ── POST /:id/deploy ──────────────────────────────────────────
 r.post('/:id/deploy', uploadLimiter, upload.single('zipFile'), async (req, res) => {
   try {
+    console.log('Début déploiement, appId =', req.params.id);
     const app = await App.findByIdAndUser(req.params.id, req.user.id);
     if (!app) return res.status(404).json({ error: 'App introuvable' });
     if (!req.file) return res.status(400).json({ error: 'Fichier ZIP requis' });
 
+    // Conversion explicite en nombre
+    const appId = Number(app.id);
+    console.log('app.id type:', typeof app.id, 'valeur:', app.id);
+    console.log('appId après Number:', typeof appId, 'valeur:', appId);
+
     const versionId = uuidv4();
     const appStorageDir = path.join(STORAGE_DIR, String(req.user.id), String(app.id), versionId);
-    fs.mkdirSync(appStorageDir, { recursive: true });
+    const extractedDir = path.join(appStorageDir, 'extracted');
+    const zipPath = path.join(appStorageDir, 'site.zip');
 
-    // Sauvegarder le ZIP localement
-    fs.writeFileSync(path.join(appStorageDir, 'site.zip'), req.file.buffer);
+    fs.mkdirSync(extractedDir, { recursive: true });
 
-    // Enregistrer en DB
-    const deployment = await Deployment.create({
-      appId: app.id,
-      versionId,
-      storagePath: appStorageDir,
-    });
+    // Sauvegarde du ZIP
+    fs.writeFileSync(zipPath, req.file.buffer);
 
-    // Mettre à jour le statut → active
+    // Extraction du ZIP
+    const zip = new AdmZip(zipPath);
+    zip.extractAllTo(extractedDir, true);
+    console.log('Extraction terminée, fichiers dans', extractedDir);
+
+    // Enregistrement en base
+    const deployment = await Deployment.create({ appId, versionId, storagePath: extractedDir });
     await App.setActiveVersion(app.id, versionId);
     await Deployment.updateStatus(deployment.id, 'success');
 
@@ -68,7 +77,7 @@ r.post('/:id/deploy', uploadLimiter, upload.single('zipFile'), async (req, res) 
       status: 'active',
     });
   } catch (err) {
-    logger.error('deploy error', { error: err.message });
+    logger.error('deploy error', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Déploiement échoué: ' + err.message });
   }
 });
