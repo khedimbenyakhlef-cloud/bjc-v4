@@ -15,8 +15,8 @@ class Deployment {
   static async updateStatus(id, status, logs = null) {
     const numericId = Number(id);
     await db.query(
-      `UPDATE deployments SET status=$1, logs=COALESCE($2,logs),
-       deployed_at=CASE WHEN $1='success' THEN NOW() ELSE deployed_at END WHERE id=$3::integer`,
+      `UPDATE deployments SET status=$1::text, logs=COALESCE($2::text, logs),
+       deployed_at=CASE WHEN $1::text='success' THEN NOW() ELSE deployed_at END WHERE id=$3::integer`,
       [status, logs, numericId]
     );
   }
