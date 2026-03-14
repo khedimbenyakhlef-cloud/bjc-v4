@@ -4,8 +4,9 @@ const db = require('../config/database');
 
 class Deployment {
   static async create({ appId, versionId, storagePath }) {
+    // Cast explicite de appId en integer
     const { rows } = await db.query(
-      `INSERT INTO deployments (app_id, version_id, storage_path) VALUES ($1, $2, $3) RETURNING *`,
+      `INSERT INTO deployments (app_id, version_id, storage_path) VALUES ($1::integer, $2, $3) RETURNING *`,
       [appId, versionId, storagePath]
     );
     return rows[0];
