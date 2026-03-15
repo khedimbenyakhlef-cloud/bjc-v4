@@ -3,33 +3,35 @@
 const logger = require('../utils/logger');
 
 let minioClient = null;
-const BUCKET = process.env.MINIO_BUCKET || 'sites';
+const BUCKET = process.env.B2_BUCKET || 'bjc-sites';
 
 async function ensureBucket() {
   if (!minioClient) {
-    logger.warn('MinIO non configuré, stockage fichiers désactivé');
+    logger.warn('Stockage B2 non configure');
     return;
   }
   try {
     const exists = await minioClient.bucketExists(BUCKET);
     if (!exists) {
-      await minioClient.makeBucket(BUCKET, 'us-east-1');
-      logger.info(`Bucket MinIO "${BUCKET}" créé`);
+      await minioClient.makeBucket(BUCKET);
+      logger.info(`Bucket "${BUCKET}" cree`);
     }
   } catch (err) {
-    logger.error('Erreur initialisation MinIO', { error: err.message });
+    logger.error('Erreur initialisation stockage', { error: err.message });
   }
 }
 
-if (process.env.MINIO_ENDPOINT && process.env.MINIO_ACCESS_KEY) {
+if (process.env.B2_ENDPOINT && process.env.B2_KEY_ID) {
   const Minio = require('minio');
   minioClient = new Minio.Client({
-    endPoint: process.env.MINIO_ENDPOINT,
-    port: parseInt(process.env.MINIO_PORT) || 9000,
-    useSSL: process.env.MINIO_USE_SSL === 'true',
-    accessKey: process.env.MINIO_ACCESS_KEY,
-    secretKey: process.env.MINIO_SECRET_KEY,
+    endPoint: process.env.B2_ENDPOINT,
+    port: 443,
+    useSSL: true,
+    accessKey: process.env.B2_KEY_ID,
+    secretKey: process.env.B2_APP_KEY,
+    pathStyle: true,
   });
+  logger.info('Stockage Backblaze B2 initialise');
 }
 
 module.exports = { minioClient, BUCKET, ensureBucket };
