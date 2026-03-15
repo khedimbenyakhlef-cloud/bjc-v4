@@ -2,23 +2,17 @@
 const router = require('express').Router();
 const mime = require('mime-types');
 const path = require('path');
-const fs = require('fs');
 const App = require('../models/App');
 const Deployment = require('../models/Deployment');
 const { proxyMiddleware } = require('../services/proxyRouter');
+const { minioClient, BUCKET } = require('../config/minio');
 const logger = require('../utils/logger');
 
-router.use('/:slug', async (req, res, next) => {
-  console.log('siteServe: route atteinte pour slug =', req.params.slug);
+router.use('/:slug*', async (req, res, next) => {
   const { slug } = req.params;
   try {
-    console.log('siteServe: recherche de l\'app avec slug', slug);
     const app = await App.findBySlug(slug);
-    if (!app) {
-      console.log('siteServe: app non trouvée');
-      return res.status(404).send('Application introuvable');
-    }
-    console.log('siteServe: app trouvée, id =', app.id, 'active_version =', app.active_version);
+    if (!app) return res.status(404).send('Application introuvable');
 
     // Fonctions serverless
     if (req.path.startsWith('/api/')) {
@@ -44,58 +38,54 @@ router.use('/:slug', async (req, res, next) => {
     }
 
     // Site statique
-    if (!app.active_version) {
-      console.log('siteServe: pas de version active');
-      return res.status(503).send('Application pas encore déployée');
-    }
+    if (!app.active_version) return res.status(503).send('Application pas encore déployée');
 
-    console.log('siteServe: recherche du déploiement pour version', app.active_version);
     const deployments = await Deployment.findByApp(app.id, 100);
     const deployment = deployments.find(d => d.version_id === app.active_version);
-    if (!deployment) {
-      logger.error('Aucun déploiement trouvé pour la version active', { appId: app.id, version: app.active_version });
-      return res.status(404).send('Déploiement introuvable');
-    }
+    if (!deployment) return res.status(404).send('Déploiement introuvable');
 
-    const basePath = deployment.storage_path;
-    console.log('siteServe: basePath =', basePath);
-    if (!basePath) return res.status(404).send('Chemin de stockage introuvable');
+    const storagePath = deployment.storage_path;
+    if (!storagePath) return res.status(404).send('Chemin de stockage introuvable');
 
-    const filePath = req.params[0] || 'index.html';
-    const requestedPath = path.normalize(filePath);
-    if (requestedPath.startsWith('..') || path.isAbsolute(requestedPath)) {
+    // Extraire le chemin du fichier demandé
+    const reqPath = req.params[0] ? req.params[0].replace(/^\//, '') : '';
+    let filePath = reqPath || 'index.html';
+
+    // Sécurité : pas de path traversal
+    const normalized = path.normalize(filePath);
+    if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
       return res.status(400).send('Chemin invalide');
     }
 
-    const fullPath = path.join(basePath, requestedPath);
-    console.log('siteServe: fullPath =', fullPath);
-    if (!fullPath.startsWith(basePath)) {
-      return res.status(400).send('Chemin invalide');
-    }
+    const objectName = `${storagePath}/${filePath}`;
 
-    if (!fs.existsSync(fullPath)) {
-      console.log('siteServe: fichier non trouvé, fallback index.html');
-      if (filePath !== 'index.html') {
-        const fallbackPath = path.join(basePath, 'index.html');
-        if (fs.existsSync(fallbackPath)) {
-          const ct = mime.lookup('index.html') || 'text/html';
-          res.set('Content-Type', ct);
-          const stream = fs.createReadStream(fallbackPath);
-          return stream.pipe(res);
-        }
+    // Lire depuis MinIO
+    try {
+      const stream = await minioClient.getObject(BUCKET, objectName);
+      const ct = mime.lookup(filePath) || 'application/octet-stream';
+      res.set('Content-Type', ct);
+      if (/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff2?|ttf|ico)$/.test(filePath)) {
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
       }
-      return res.status(404).send('Fichier introuvable');
+      return stream.pipe(res);
+    } catch (err) {
+      // Fichier non trouvé → fallback index.html (SPA)
+      if (err.code === 'NoSuchKey' || err.message.includes('Not Found')) {
+        if (filePath !== 'index.html') {
+          try {
+            const fallback = await minioClient.getObject(BUCKET, `${storagePath}/index.html`);
+            res.set('Content-Type', 'text/html');
+            return fallback.pipe(res);
+          } catch {
+            return res.status(404).send('Fichier introuvable');
+          }
+        }
+        return res.status(404).send('Fichier introuvable');
+      }
+      throw err;
     }
-
-    const ct = mime.lookup(filePath) || 'application/octet-stream';
-    res.set('Content-Type', ct);
-    if (/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff2?|ttf|ico)$/.test(filePath)) {
-      res.set('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-    const stream = fs.createReadStream(fullPath);
-    stream.pipe(res);
   } catch (err) {
-    logger.error('siteServe', { slug, error: err.message, stack: err.stack });
+    logger.error('siteServe', { slug, error: err.message });
     res.status(500).send('Erreur interne');
   }
 });
