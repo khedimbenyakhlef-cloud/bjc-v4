@@ -14,7 +14,6 @@ router.use('/:slug*', async (req, res, next) => {
     const app = await App.findBySlug(slug);
     if (!app) return res.status(404).send('Application introuvable');
 
-    // Fonctions serverless
     if (req.path.startsWith('/api/')) {
       const fnSlug = req.path.replace('/api/', '').split('/')[0];
       const ServerlessFunction = require('../models/Function');
@@ -31,27 +30,23 @@ router.use('/:slug*', async (req, res, next) => {
       }
     }
 
-    // App full-stack
     if (app.app_type !== 'static' && app.container_id) {
       req.params.slug = slug;
       return proxyMiddleware(req, res, next);
     }
 
-    // Site statique
-    if (!app.active_version) return res.status(503).send('Application pas encore déployée');
+    if (!app.active_version) return res.status(503).send('Application pas encore deployee');
 
     const deployments = await Deployment.findByApp(app.id, 100);
     const deployment = deployments.find(d => d.version_id === app.active_version);
-    if (!deployment) return res.status(404).send('Déploiement introuvable');
+    if (!deployment) return res.status(404).send('Deploiement introuvable');
 
     const storagePath = deployment.storage_path;
     if (!storagePath) return res.status(404).send('Chemin de stockage introuvable');
 
-    // Extraire le chemin du fichier demandé
     const reqPath = req.params[0] ? req.params[0].replace(/^\//, '') : '';
     let filePath = reqPath || 'index.html';
 
-    // Sécurité : pas de path traversal
     const normalized = path.normalize(filePath);
     if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
       return res.status(400).send('Chemin invalide');
@@ -59,7 +54,6 @@ router.use('/:slug*', async (req, res, next) => {
 
     const objectName = `${storagePath}/${filePath}`;
 
-    // Lire depuis MinIO
     try {
       const stream = await minioClient.getObject(BUCKET, objectName);
       const ct = mime.lookup(filePath) || 'application/octet-stream';
@@ -69,7 +63,6 @@ router.use('/:slug*', async (req, res, next) => {
       }
       return stream.pipe(res);
     } catch (err) {
-      // Fichier non trouvé → fallback index.html (SPA)
       if (err.code === 'NoSuchKey' || err.message.includes('Not Found')) {
         if (filePath !== 'index.html') {
           try {
