@@ -6,15 +6,11 @@ const { uploadLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const fs = require('fs');
 const AdmZip = require('adm-zip');
 const App = require('../models/App');
 const Deployment = require('../models/Deployment');
+const { minioClient, BUCKET } = require('../config/minio');
 const logger = require('../utils/logger');
-
-// ── Stockage local ───────────────────────────────
-const STORAGE_DIR = '/tmp/storage';
-if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,73 +31,67 @@ r.delete('/:id', c.delete);
 r.get('/:id/logs', c.getLogs);
 r.get('/:id/stats', c.getStats);
 
-// ── POST /:id/deploy ──────────────────────────────────────────
 r.post('/:id/deploy', uploadLimiter, upload.single('zipFile'), async (req, res) => {
   try {
-    console.log('Début déploiement, appId =', req.params.id);
     const app = await App.findByIdAndUser(req.params.id, req.user.id);
     if (!app) return res.status(404).json({ error: 'App introuvable' });
     if (!req.file) return res.status(400).json({ error: 'Fichier ZIP requis' });
 
     const appId = Number(app.id);
     const versionId = uuidv4();
-    const appStorageDir = path.join(STORAGE_DIR, String(req.user.id), String(app.id), versionId);
-    const extractedDir = path.join(appStorageDir, 'extracted');
-    const zipPath = path.join(appStorageDir, 'site.zip');
+    const storagePath = `apps/${req.user.id}/${app.id}/${versionId}`;
 
-    fs.mkdirSync(extractedDir, { recursive: true });
+    // Extraction du ZIP en memoire
+    const zip = new AdmZip(req.file.buffer);
+    let entries = zip.getEntries().filter(e => {
+      if (e.isDirectory) return false;
+      const norm = path.normalize(e.entryName);
+      return !norm.startsWith('..') && !path.isAbsolute(norm);
+    });
 
-    // Sauvegarde du ZIP
-    fs.writeFileSync(zipPath, req.file.buffer);
+    if (!entries.length) return res.status(400).json({ error: 'ZIP vide ou invalide' });
 
-    // Extraction
-    const zip = new AdmZip(zipPath);
-    zip.extractAllTo(extractedDir, true);
-    console.log('Extraction terminée dans', extractedDir);
-
-    // Vérifier si le dossier extrait contient un unique dossier racine
-    const items = fs.readdirSync(extractedDir);
-    if (items.length === 1 && fs.statSync(path.join(extractedDir, items[0])).isDirectory()) {
-      // Cas où le ZIP a été fait avec un dossier parent : on utilise ce dossier comme racine
-      const realRoot = path.join(extractedDir, items[0]);
-      // On déplace tout le contenu du dossier racine vers extractedDir
-      const subItems = fs.readdirSync(realRoot);
-      subItems.forEach(item => {
-        const src = path.join(realRoot, item);
-        const dest = path.join(extractedDir, item);
-        fs.renameSync(src, dest);
-      });
-      fs.rmdirSync(realRoot);
-      console.log('Ajustement : le dossier racine unique a été aplati');
+    // Detecter dossier racine unique et aplatir
+    const roots = [...new Set(entries.map(e => e.entryName.split('/')[0]))];
+    let prefix = '';
+    if (roots.length === 1 && entries.every(e => e.entryName.startsWith(roots[0] + '/'))) {
+      prefix = roots[0] + '/';
     }
 
-    // Vérifier qu'un index.html existe
-    const indexPath = path.join(extractedDir, 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      logger.warn('Aucun index.html trouvé dans le ZIP', { appId: app.id });
-      // On peut renvoyer une erreur ou continuer (le site sera vide)
+    // Upload vers B2
+    if (!minioClient) return res.status(500).json({ error: 'Stockage B2 non configure' });
+
+    const batchSize = 10;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (entry) => {
+        const content = entry.getData();
+        const relativeName = prefix ? entry.entryName.slice(prefix.length) : entry.entryName;
+        if (!relativeName) return;
+        const objName = `${storagePath}/${relativeName}`;
+        await minioClient.putObject(BUCKET, objName, content, content.length);
+      }));
     }
+
+    logger.info('Fichiers uploades vers B2', { appId, versionId, count: entries.length });
 
     // Enregistrement en base
-    const deployment = await Deployment.create({ appId, versionId, storagePath: extractedDir });
+    const deployment = await Deployment.create({ appId, versionId, storagePath });
     await App.setActiveVersion(app.id, versionId);
     await Deployment.updateStatus(deployment.id, 'success');
 
-    logger.info('Déploiement réussi', { appId: app.id, versionId, userId: req.user.id });
-
     res.status(202).json({
-      message: 'Déploiement réussi',
+      message: 'Deploiement reussi',
       deploymentId: deployment.id,
       versionId,
       status: 'active',
     });
   } catch (err) {
     logger.error('deploy error', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Déploiement échoué: ' + err.message });
+    res.status(500).json({ error: 'Deploiement echoue: ' + err.message });
   }
 });
 
-// ── GET /:id/deployments ──────────────────────────────────────
 r.get('/:id/deployments', async (req, res) => {
   try {
     const app = await App.findByIdAndUser(req.params.id, req.user.id);
@@ -117,7 +107,7 @@ r.get('/:id/deployments/:depId', async (req, res) => {
     const app = await App.findByIdAndUser(req.params.id, req.user.id);
     if (!app) return res.status(404).json({ error: 'App introuvable' });
     const dep = await Deployment.findById(req.params.depId);
-    if (!dep || dep.app_id !== app.id) return res.status(404).json({ error: 'Déploiement introuvable' });
+    if (!dep || dep.app_id !== app.id) return res.status(404).json({ error: 'Deploiement introuvable' });
     res.json(dep);
   } catch (err) {
     res.status(500).json({ error: err.message });
