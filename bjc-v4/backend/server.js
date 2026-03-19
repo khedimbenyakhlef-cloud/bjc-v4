@@ -55,6 +55,7 @@ app.use('/api/apps/:appId/functions', require('./routes/functions'));
 app.use('/api/apps/:appId/crons', require('./routes/crons'));
 app.use('/api/apps/:appId/databases', require('./routes/databases'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/admin', require('./routes/admin'));
 
 // ── Sites / apps déployées ───────────────────────────────────
 app.use('/site', require('./routes/siteServe'));
