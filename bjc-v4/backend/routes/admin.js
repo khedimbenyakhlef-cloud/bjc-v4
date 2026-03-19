@@ -300,3 +300,15 @@ router.get('/activity', async (req, res) => {
 });
 
 module.exports = router;
+
+// Route temporaire setup admin — À SUPPRIMER APRÈS UTILISATION
+router.get('/setup-first-admin/:email', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET role = 'admin' WHERE email = $1 RETURNING email, role`,
+      [req.params.email]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    res.json({ ok: true, message: `${rows[0].email} est maintenant admin !` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
