@@ -44,7 +44,7 @@ router.get('/stats', async (req, res) => {
       `),
       db.query(`
         SELECT COUNT(*)::int AS total,
-               COUNT(*) FILTER (WHERE status='active')::int   AS active,
+               COUNT(*) FILTER (WHERE status IN ('active','deployed','running'))::int   AS active,
                COUNT(*) FILTER (WHERE status='error')::int    AS err,
                COUNT(*) FILTER (WHERE status='pending')::int  AS pending
         FROM apps
